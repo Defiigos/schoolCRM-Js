@@ -1,7 +1,7 @@
 import axios from "axios";
 
 
-const url = 'http://192.168.100.8:8081/api'
+const url = 'http://193.176.78.237:8080/api'
 
 
 const loginConfig = {
