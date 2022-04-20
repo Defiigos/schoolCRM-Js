@@ -1,0 +1,23 @@
+.loginBackground {
+  height:100vh
+}
+  
+  /* label focus color */
+.input-field input:focus + label {
+  color: #fb8c00 !important;
+}
+  /* label underline focus color */
+.input-field input:focus {
+  border-bottom: 1px solid #fb8c00 !important;
+  box-shadow: 0 1px 0 0 #fb8c00 !important;
+}
+  
+  /* icon prefix focus color */
+.input-field .prefix.active {
+  color: #fb8c00 ;
+}
+
+ /* select dropdown element color */
+ul.dropdown-content li span {
+  color: #fb8c00;
+}

@@ -1,32 +1,14 @@
 <template>
     <div class="container">
         <div class="section">
-            <div class="row">
-                <div class="col l6">
-                    <h2>{{displayDate}}</h2>
-                    <h4>
-                        Расписание на сегодня
-                        <orange-button
-                            class="hide-on-small-only" 
-                            icon="add"
-                            @click="createBtnClick"
-                        />
-                    </h4>
-                    <div class="center">
-                        <orange-button 
-                            class="hide-on-med-and-up" 
-                            icon="add"
-                            @click="createBtnClick"
-                        />
-                    </div>
-                </div>
-                <!-- <div class="col l6">
-                    <h2 class="center">&lt;Календарь&gt;</h2>
-                </div> -->
-            </div>
+            <entity-header 
+                title="Уроки"
+                showAddButton
+                v-model:filter="displayFilter"
+                @addClick="actionCreate"
+            />
         </div>
         <div class="divider"></div>
-        
         <div v-if="!isLoad" class="section">
             <div v-if="data.length > 0">
                 <entity-table
@@ -40,7 +22,7 @@
                 />
             </div>
             <div v-else class="center-align">
-                <h4>Уроков на сегодня нет</h4>
+                <h4>Данных нет</h4>
             </div>
         </div>
         <div v-else class="section">
@@ -48,34 +30,37 @@
         </div>
 
         <entity-modal
+            refs="filter"
+            title="Поиск"
+            actionFindTitle="Найти"
+            :inputs="filters" 
+            :statuses="statuses"
+            v-model="filter"
+        />
+        <entity-modal
             refs="create"
-            title="Изменение Урока"
-            actionFindTitle="Изменить"
+            :title="entityModalTitle"
+            :actionFindTitle="entityModalAction"
             :inputs="entityModalFields" 
             :statuses="statuses"
             :lessonDurations="lessonDurations"
             :locations="locations"
             :lessonGroups="lessonGroups"
             :paymentAmounts="paymentAmounts"
+            :teachers="teachers" 
             v-model="entity"
         />
-        <modal-confirm
-            @accept="actionRedirected" 
-            v-model:instance="modalRedirectInstance"
-        >
-            <h5>Создать новый Урок?</h5>
-        </modal-confirm>
         <modal-confirm 
             @accept="actionAccepted" 
             v-model:instance="confirmModalInstance"
         >
             <h5>Удалить Урок?</h5>
         </modal-confirm>
-  </div>
+    </div>
 </template>
 
 <script>
-import OrangeButton from '@/components/Ui/OrangeButton.vue'
+import EntityHeader from '@/components/EntityHeader.vue'
 import EntityTable from '@/components/EntityTable.vue'
 import EntityModal from '@/components/EntityModal.vue'
 import ModalConfirm from '@/components/ModalConfirm.vue'
@@ -83,30 +68,40 @@ import PreLoader from '@/components/PreLoader.vue'
 
 import {EntityAPI} from "@/api/Entity"
 import {lessonsStatuses} from '@/assets/statuses'
-import {lessonsHomeHeaders} from '@/assets/headers'
-import {lessonsHomeUpdateFields} from '@/assets/entityFields'
+import {lessonsUserHeaders} from '@/assets/headers'
+import {lessonsAdminHeaders} from '@/assets/headers'
+import {lessonsUserFilters} from '@/assets/filters'
+import {lessonsAdminFilters} from '@/assets/filters'
+import {lessonsUserCreateFields} from '@/assets/entityFields'
+import {lessonsAdminCreateFields} from '@/assets/entityFields'
+import {lessonsUserUpdateFields} from '@/assets/entityFields'
+import {lessonsAdminUpdateFields} from '@/assets/entityFields'
 
 export default {
-  components: { OrangeButton, EntityTable, EntityModal, ModalConfirm, PreLoader },
-    name: "HomeView",
+    components: { EntityHeader, EntityTable, EntityModal, ModalConfirm, PreLoader },
+    name: "LessonsView",
     data: () => ({
         isLoad: false,
-        selectedEntity: {},
-        modalRedirectInstance: {},
-        confirmModalInstance: {},
 
-        entityModalFields: lessonsHomeUpdateFields,
+        filter: '',
+        displayFilter: '',
+
+        entityModalTitle: '',
+        entityModalAction: '',
+        entityModalFields: [],
         entity: '',
         lessonDurations: [],
         locations: [],
         lessonGroups: [],
         paymentAmounts: [],
+        teachers: [],
 
-        displayDate: '',
-        curentDate: '',
-        
+        selectedEntity: {},
+        confirmModalInstance: {},
+
         statuses: lessonsStatuses,
-        headers: lessonsHomeHeaders,
+        headers: [],
+        filters: [],
         data: []
     }),
     methods: {
@@ -116,7 +111,8 @@ export default {
                 queryFilter = ''
             }
             if (localStorage.hasOwnProperty('userRoles'))
-                queryFilter = `?teacherId=${localStorage.getItem('userId')} ${queryFilter}&date=${this.curentDate}`
+                if (localStorage.getItem('userRoles') === 'ROLE_USER')
+                    queryFilter = `?teacherId=${localStorage.getItem('userId')} ${queryFilter}`
             
             EntityAPI.get(queryFilter).then((res) => {
                 res.data.forEach((row, index) => {
@@ -134,6 +130,15 @@ export default {
                          })
         },
 
+        updateData(id, modData) {
+            this.data.forEach((row, index) => {
+                if (row['id'] === id) {
+                    Object.keys(modData).forEach((key) => {
+                        this.data[index][key] = modData[key]
+                    })
+                }
+            })
+        },
         entityToString(entity) {
             let entityString = '?'
             Object.keys(entity).forEach((key, iter) => {
@@ -145,22 +150,36 @@ export default {
             return entityString
         },
 
-        createBtnClick() {
-             this.modalRedirectInstance.open()
+        actionCreate() {
+            this.entityModalTitle = 'Создание Урока' 
+            this.entityModalAction = 'Создать'
+
+             if (localStorage.hasOwnProperty('userRoles'))
+                if (localStorage.getItem('userRoles') === 'ROLE_USER') {
+                    this.entityModalFields = lessonsUserCreateFields
+                }
+                else {
+                    this.entityModalFields = lessonsAdminCreateFields
+                }
         },
         actionEdit(entity) {
             this.selectedEntity = entity
             this.entity = this.entityToString(entity)
+            this.entityModalTitle = 'Изменение Урока' 
+            this.entityModalAction = 'Изменить'
+            if (localStorage.hasOwnProperty('userRoles'))
+                if (localStorage.getItem('userRoles') === 'ROLE_USER') {
+                    this.entityModalFields = lessonsUserUpdateFields
+                }
+                else {
+                    this.entityModalFields = lessonsAdminUpdateFields
+                }
         },
         actionDelete(entity) {
             this.selectedEntity = entity
             this.confirmModalInstance.open()
         },
 
-        
-        actionRedirected() {
-            this.$router.push("create/lessons")
-        },
         actionAccepted() {
             EntityAPI.delete(this.selectedEntity.id).then(() => {
                 this.data.forEach((item, iter) => {
@@ -175,11 +194,6 @@ export default {
         }
     },
     mounted() {
-        const today = new Date()
-        var options = { year: 'numeric', month: 'short', day: '2-digit' }
-        this.displayDate = today.toLocaleDateString('ru-RU', options)
-        this.curentDate = `${today.getFullYear()}-${Intl.DateTimeFormat('en', {month: '2-digit'}).format(today)}-${today.getDate()}`
-
         EntityAPI.entity = 'lessons/durations'
         EntityAPI.get().then((res) => {
             const durations = []
@@ -240,10 +254,63 @@ export default {
                 M.toast({html: 'Ошибка загрузки данных! ' + e, classes: 'red-text white'})
                 })
 
+        if (localStorage.hasOwnProperty('userRoles'))
+            if (localStorage.getItem('userRoles') === 'ROLE_ADMIN' || localStorage.getItem('userRoles') === 'ROLE_SUPERADMIN') {
+                EntityAPI.entity = 'users'
+                EntityAPI.get('?active=true').then((res) => {
+                    const teachers = []
+                    res.data.forEach((row) => {
+                        const teacher = {
+                            title: row['username'],
+                            type: row['id'].toString()
+                        }
+                        teachers.push(teacher)
+                    })
+                    this.teachers = teachers
+                    }).catch((e) => {
+                        M.toast({html: 'Ошибка загрузки данных! ' + e, classes: 'red-text white'})
+                        })
+            }
+
         EntityAPI.entity = 'lessons'
         this.fetchData()
+
+        if (localStorage.hasOwnProperty('userRoles'))
+          if (localStorage.getItem('userRoles') === 'ROLE_USER') {
+            this.headers = lessonsUserHeaders
+            this.filters = lessonsUserFilters
+          }
+          else {
+            this.headers = lessonsAdminHeaders
+            this.filters = lessonsAdminFilters
+          }
     },
     watch: {
+        displayFilter() {
+            if (this.displayFilter === '')
+                this.filter = ''
+        },
+        filter() {
+            this.displayFilter = this.filter
+            this.displayFilter.slice(1).split('&').forEach((item) => {
+                const filterItem = item.split('=')
+
+                this.filters.forEach((filter) => {
+                    if (filter.target === filterItem[0]) {
+                         if (filter.target == 'status'){
+                            this.statuses.forEach((status) => {
+                                if (status.type == filterItem[1]){
+                                    this.displayFilter = this.displayFilter.replace(item, filter.title + ": " + status.title)
+                                }
+                            })
+                        }
+                        this.displayFilter = this.displayFilter.replace(item, filter.title + ": " + filterItem[1])
+                    }
+                })
+            })
+            this.displayFilter = this.displayFilter.slice(1).replaceAll('&', ', ')
+            this.fetchData(this.filter)
+        },
         entity() {
             if (this.entity !== '') {
                 const sendEntity = {}
@@ -266,7 +333,7 @@ export default {
                                     delete sendEntity[key]
                                 }
                             }
-                        })                        
+                        })
                         EntityAPI.put(id, sendEntity).then(() => {
                             this.fetchData()
                             M.toast({html: "Урок изменен!", classes: 'green-text white'})
@@ -275,9 +342,20 @@ export default {
                                 })
                     }
                 }
+                else {
+                    if(!sendEntity['teacher'])
+                        sendEntity['teacher'] = {'id': localStorage.getItem('userId')}
+                        
+                    EntityAPI.post(sendEntity).then(() => {
+                    this.fetchData()
+                    M.toast({html: "Урок создан!", classes: 'green-text white'})
+                    }).catch((e) => {
+                        M.toast({html: 'Ошибка! ' + e.response.data.message, classes: 'red-text white'})
+                        })
+                    this.entity = ''
+                }
             }
         }
     }
 }
 </script>
-
